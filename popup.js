@@ -84,52 +84,85 @@ browser.tabs.query({ currentWindow: true, active: true }).then(tabs => {
 			node.querySelector('li').dataset.fid = fid
 			node.querySelector('li').dataset.elid = elid
 			node.querySelector('.element-label').textContent = `${el.type.charAt(0).toUpperCase() + el.type.slice(1)} in frame ${fid}`
-			const gain = node.querySelector('.element-gain')
-			const gainNumberInput = node.querySelector('.element-gain-num')
-			gain.value = settings.gain || 1
-			gain.parentElement.querySelector('.element-gain-num').value = '' + gain.value
 
+			const gain = node.querySelector('.element-gain')
+			gain.value = settings.gain || 1
+			gain.parentElement.querySelector('.target').innerText = '' + gain.value
 			gain.addEventListener('input', function () {
-				// We used a function expression thus gain === this
 				applySettings(fid, elid, { gain: this.value })
-				this.parentElement.querySelector('.element-gain-num').value = '' + this.value
+				this.parentElement.querySelector('.target').innerText = '' + this.value
+				browser.storage.local.get('save_settings').then(res => {
+					if (!res['save_settings']) {return}
+					browser.storage.local.set({'gain': this.value})
+				})
 			})
-			gainNumberInput.addEventListener('input', function () {
-				if (+this.value > +this.getAttribute('max'))
-					this.value = this.getAttribute('max')
-				if (+this.value < +this.getAttribute('min'))
-					this.value = this.getAttribute('min')
-				
-				applySettings(fid, elid, { gain: this.value })
-				this.parentElement.querySelector('.element-gain').value = '' + this.value
-			})
+
 			const pan = node.querySelector('.element-pan')
-			const panNumberInput = node.querySelector('.element-pan-num')
 			pan.value = settings.pan || 0
-			pan.parentElement.querySelector('.element-pan-num').value = '' + pan.value
+			pan.parentElement.querySelector('.target').innerText = '' + pan.value
 			pan.addEventListener('input', function () {
 				applySettings(fid, elid, { pan: this.value })
-				this.parentElement.querySelector('.element-pan-num').value = '' + this.value
+				this.parentElement.querySelector('.target').innerText = '' + this.value
+				browser.storage.local.get('save_settings').then(res => {
+					if (!res['save_settings']) {return}
+					browser.storage.local.set({'pan': this.value})
+				})
 			})
-			panNumberInput.addEventListener('input', function () {
-				if (+this.value > +this.getAttribute('max'))
-					this.value = this.getAttribute('max')
-				if (+this.value < +this.getAttribute('min'))
-					this.value = this.getAttribute('min')
-				
-				applySettings(fid, elid, { pan: this.value })
-				this.parentElement.querySelector('.element-pan').value = '' + this.value
-			})
+
 			const mono = node.querySelector('.element-mono')
 			mono.checked = settings.mono || false
 			mono.addEventListener('change', _ => {
 				applySettings(fid, elid, { mono: mono.checked })
+				browser.storage.local.get('save_settings').then(res => {
+					if (!res['save_settings']) {return}
+					browser.storage.local.set({'mono': mono.checked})
+				})
 			})
+
 			const flip = node.querySelector('.element-flip')
 			flip.checked = settings.flip || false
 			flip.addEventListener('change', _ => {
 				applySettings(fid, elid, { flip: flip.checked })
+				browser.storage.local.get('save_settings').then(res => {
+					if (!res['save_settings']) {return}
+					browser.storage.local.set({'flip': flip.checked})
+				})
 			})
+
+			const save_settings = node.querySelector('.save-settings')
+			browser.storage.local.get('save_settings').then(res => {save_settings.checked = res['save_settings']})
+			const elms = {"gain": gain, "pan": pan, "mono": mono, "flip": flip}
+			save_settings.addEventListener('change', _ => {
+				browser.storage.local.set({ 'save_settings': save_settings.checked })
+				if (save_settings.checked) {
+					for (let [key, val] of Object.entries(elms)) {
+						let data = {}
+						data[key] = val.type == "range" ? val.value : val.checked
+						browser.storage.local.set(data)
+					}
+				}
+			})
+			
+			// Automatically load saved settings when starting the extension if saved_settings is true
+			browser.storage.local.get('save_settings').then((res) => {
+				if (res['save_settings']) {
+					for (let [key, htmlElem] of Object.entries(elms)) {
+						browser.storage.local.get(key).then(res => {
+							switch (htmlElem.type) {
+								case "range":
+									htmlElem.parentElement.querySelector(".target").innerText = res[key]
+									htmlElem.value = res[key]
+									break
+								case "checkbox":
+									htmlElem.parentElement.querySelector('input').checked = res[key]
+									break
+							}
+							applySettings(fid, elid, res)
+						})
+					}
+				}
+			})
+
 			elementsList.appendChild(node)
 			elCount += 1
 		}
